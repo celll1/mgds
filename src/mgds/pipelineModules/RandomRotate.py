@@ -4,6 +4,7 @@ from torchvision.transforms import functional, InterpolationMode
 from mgds.PipelineModule import PipelineModule
 from mgds.pipelineModuleTypes.RandomAccessPipelineModule import RandomAccessPipelineModule
 
+import random
 
 class RandomRotate(
     PipelineModule,
@@ -48,13 +49,33 @@ class RandomRotate(
 
         for name in self.names:
             previous_item = self._get_previous_item(variation, name, index)
-            if enabled or fixed_enabled:
+            if (enabled or fixed_enabled) and rand.uniform(0, 1) < 0.2:
                 orig_dtype = previous_item.dtype
-                if orig_dtype == torch.bfloat16:
-                    previous_item = previous_item.to(dtype=torch.float32)
-                previous_item = functional.rotate(previous_item, angle, interpolation=InterpolationMode.BILINEAR)
-                previous_item = previous_item.to(dtype=orig_dtype)
-
-            item[name] = previous_item
+                img = previous_item.to(dtype=torch.float32) if orig_dtype == torch.bfloat16 else previous_item
+                
+                orig_h, orig_w = img.shape[1:3]
+                
+                rotated = functional.rotate(img, angle, interpolation=InterpolationMode.BILINEAR, expand=True)
+                
+                rotated_h, rotated_w = rotated.shape[1:3]
+                scale = min(orig_h / rotated_h, orig_w / rotated_w)
+                
+                new_h = int(rotated_h * scale)
+                new_w = int(rotated_w * scale)
+                rotated = functional.resize(rotated, (new_h, new_w), interpolation=InterpolationMode.BILINEAR)
+                
+                offset_y = int((new_h - orig_h) * rand.normalvariate(0, 0.25))
+                offset_x = int((new_w - orig_w) * rand.normalvariate(0, 0.25))
+                
+                start_y = (new_h - orig_h) // 2 + offset_y
+                start_x = (new_w - orig_w) // 2 + offset_x
+                
+                rotated = rotated[:, 
+                                max(0, start_y):max(0, start_y) + orig_h,
+                                max(0, start_x):max(0, start_x) + orig_w]
+                
+                item[name] = rotated.to(dtype=orig_dtype) if orig_dtype == torch.bfloat16 else rotated
+            else:
+                item[name] = previous_item
 
         return item
