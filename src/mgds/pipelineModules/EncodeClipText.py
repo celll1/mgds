@@ -61,34 +61,47 @@ class EncodeClipText(
 
         original_device = tokens.device
         text_encoder_device = next(text_encoder.parameters()).device
+        tokens = tokens.to(text_encoder_device)
 
-        chunks = [tokens[:, i:i + chunk_length] for i in range(0, tokens.shape[1], chunk_length)]
-        valid_chunks = [chunk for chunk in chunks if chunk.numel() > 0]
-        if not valid_chunks:
+        if tokens.dim() == 1:
+            tokens = tokens.unsqueeze(0)
+
+        # チャンクに分割
+        chunks = []
+        for i in range(0, tokens.shape[1], chunk_length):
+            chunk = tokens[:, i:i + chunk_length]
+            if chunk.numel() > 0:
+                # 最後のチャンクがchunk_lengthより小さい場合、パディング
+                if chunk.shape[1] < chunk_length:
+                    padding = torch.full(
+                        (chunk.shape[0], chunk_length - chunk.shape[1]),
+                        text_encoder.config.pad_token_id,
+                        dtype=chunk.dtype,
+                        device=chunk.device
+                    )
+                    chunk = torch.cat([chunk, padding], dim=1)
+                chunks.append(chunk)
+
+        if not chunks:
             return None, None
-            
-        batched_chunks = torch.cat(valid_chunks, dim=0).to(text_encoder_device)
-        batch_size = batched_chunks.shape[0]
-        
-        bos_tokens = torch.full((batch_size, 1),
+
+        # max_embeddings_multiplesまでに制限
+        if len(chunks) > max_embeddings_multiples:
+            chunks = chunks[:max_embeddings_multiples]
+
+        # バッチ化して処理
+        batched_chunks = torch.cat(chunks, dim=0)
+
+        # BOS/EOSトークンを追加
+        bos_tokens = torch.full((batched_chunks.shape[0], 1),
                               text_encoder.config.bos_token_id,
                               dtype=batched_chunks.dtype,
-                              device=text_encoder_device)
-        eos_tokens = torch.full((batch_size, 1),
+                              device=batched_chunks.device)
+        eos_tokens = torch.full((batched_chunks.shape[0], 1),
                               text_encoder.config.eos_token_id,
                               dtype=batched_chunks.dtype,
-                              device=text_encoder_device)
-        
+                              device=batched_chunks.device)
         batched_chunks = torch.cat([bos_tokens, batched_chunks, eos_tokens], dim=1)
-        
-        if batched_chunks.shape[1] < chunk_length + 2:
-            padding = torch.full(
-                (batch_size, chunk_length + 2 - batched_chunks.shape[1]),
-                text_encoder.config.eos_token_id,
-                dtype=batched_chunks.dtype,
-                device=text_encoder_device
-            )
-            batched_chunks = torch.cat([batched_chunks, padding], dim=1)
 
         outputs = text_encoder(
             batched_chunks,
@@ -102,25 +115,22 @@ class EncodeClipText(
             if add_layer_norm:
                 final_layer_norm = text_encoder.text_model.final_layer_norm
                 embeddings = final_layer_norm(embeddings)
-            embeddings = embeddings.to(original_device)
-            chunk_embeddings = list(embeddings.chunk(len(valid_chunks)))
             
-            if len(chunk_embeddings) > max_embeddings_multiples:
-                chunk_embeddings = chunk_embeddings[:max_embeddings_multiples]
-            text_encoder_output = torch.cat(chunk_embeddings, dim=1)
+            # チャンクを元に戻して結合
+            chunk_embeddings = list(embeddings.chunk(len(chunks)))
+            text_encoder_output = torch.cat(chunk_embeddings, dim=1).to(original_device)
         else:
             text_encoder_output = None
 
         if add_pooled_output:
             if hasattr(outputs, "text_embeds"):
-                pooled = outputs.text_embeds.to(original_device)
+                pooled = outputs.text_embeds
             elif hasattr(outputs, "pooler_output"):
-                pooled = outputs.pooler_output.to(original_device)
-            pooled_outputs = list(pooled.chunk(len(valid_chunks)))
+                pooled = outputs.pooler_output
             
-            if len(pooled_outputs) > max_embeddings_multiples:
-                pooled_outputs = pooled_outputs[:max_embeddings_multiples]
-            pooled_text_encoder_output = pooled_outputs[0] if pooled_outputs else None
+            # 最初のチャンクのプール出力のみを使用
+            pooled_outputs = list(pooled.chunk(len(chunks)))
+            pooled_text_encoder_output = pooled_outputs[0].to(original_device)
         else:
             pooled_text_encoder_output = None
 
