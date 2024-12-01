@@ -35,9 +35,11 @@ class Tokenize(
     def get_item(self, variation: int, index: int, requested_name: str = None) -> dict:
         text = self._get_previous_item(variation, self.in_name, index)
 
+        padding = 'max_length' if isinstance(self.tokenizer, T5Tokenizer | T5TokenizerFast) else False
+
         tokenizer_output = self.tokenizer(
             text,
-            padding='max_length',
+            padding=padding,
             truncation=True,
             max_length=self.max_token_length,
             return_tensors="pt",
