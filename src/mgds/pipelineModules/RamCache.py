@@ -3,7 +3,7 @@ import json
 import math
 from typing import Any, Callable
 
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from mgds.PipelineModule import PipelineModule
 from mgds.pipelineModuleTypes.SingleVariationRandomAccessPipelineModule import SingleVariationRandomAccessPipelineModule

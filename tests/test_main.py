@@ -2,7 +2,7 @@ import os.path
 
 import torch
 from diffusers import AutoencoderKL
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from transformers import DPTImageProcessor, DPTForDepthEstimation, CLIPTokenizer
 
 from mgds.OutputPipelineModule import OutputPipelineModule

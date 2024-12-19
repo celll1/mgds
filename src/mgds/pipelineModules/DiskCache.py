@@ -6,7 +6,7 @@ import os
 from typing import Any, Callable
 
 import torch
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from mgds.PipelineModule import PipelineModule
 from mgds.pipelineModuleTypes.SingleVariationRandomAccessPipelineModule import SingleVariationRandomAccessPipelineModule

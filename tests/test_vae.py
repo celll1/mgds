@@ -1,6 +1,6 @@
 import torch
 from diffusers import AutoencoderKL
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from mgds.pipelineModules.AspectBatchSorting import AspectBatchSorting
 from mgds.pipelineModules.AspectBucketing import AspectBucketing

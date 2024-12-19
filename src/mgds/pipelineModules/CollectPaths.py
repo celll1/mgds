@@ -1,6 +1,6 @@
 import os
 
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from mgds.PipelineModule import PipelineModule
 from mgds.pipelineModuleTypes.RandomAccessPipelineModule import RandomAccessPipelineModule
